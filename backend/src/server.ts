@@ -11,32 +11,30 @@ dotenv.config();
 const app = express();
 
 /* =========================
-   CORS CONFIG (FIXED)
+   CORS (FIXED + SAFE)
 ========================= */
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://agprogram-e9b7.vercel.app/'
+  'https://agprogram-e9b7.vercel.app'
 ];
 
 const corsOptions = {
   origin: function (origin: any, callback: any) {
-    // allow Postman / mobile apps
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    return callback(null, false); // silently block invalid origins
+    return callback(null, false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 /* =========================
    BASIC MIDDLEWARE
@@ -50,15 +48,11 @@ app.use((req, res, next) => {
 });
 
 /* =========================
-   ENV
+   ENV + DB
 ========================= */
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
-
-/* =========================
-   DB CONNECTION
-========================= */
 
 connectDB();
 
@@ -226,7 +220,7 @@ app.get('/api/dashboard', authenticateToken, async (req: AuthRequest, res: Respo
 });
 
 /* =========================
-   TRANSACTIONS (UNCHANGED)
+   TRANSACTIONS
 ========================= */
 
 app.get('/api/transactions', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -247,12 +241,162 @@ app.get('/api/transactions', authenticateToken, async (req: AuthRequest, res: Re
   }
 });
 
+app.post('/api/transactions', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const { type, amount, commission, client_id } = req.body;
+  if (!type || !amount || amount <= 0) {
+    return res.status(400).json({ message: 'Invalid amount or type' });
+  }
+  try {
+    const trans = new Transaction({ type, amount, commission, client_id: client_id || null });
+    await trans.save();
+    res.status(201).json({ message: 'Transaction recorded' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 /* =========================
-   CLIENTS / DEBTS / CASH / SETTINGS
-   (UNCHANGED LOGIC)
+   CLIENTS
 ========================= */
 
-/* ... keep your other routes exactly as they are ... */
+app.get('/api/clients', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const clients = await Client.find().sort({ name: 1 });
+    const formatted = clients.map(c => ({ ...c.toObject(), id: c._id }));
+    res.json(formatted);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/clients', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const { name, phone } = req.body;
+  if (!name) return res.status(400).json({ message: 'Name is required' });
+  try {
+    const client = new Client({ name, phone });
+    await client.save();
+    res.status(201).json({ message: 'Client added' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/clients/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await Client.findByIdAndUpdate(req.params.id, req.body);
+    res.json({ message: 'Client updated' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/clients/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await Client.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Client deleted' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* =========================
+   DEBTS
+========================= */
+
+app.get('/api/debts', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const debts = await Debt.find().populate('client_id', 'name').sort({ createdAt: -1 });
+    const formatted = debts.map(d => ({
+      ...d.toObject(),
+      id: d._id,
+      client_name: (d.client_id as any)?.name || 'Unknown'
+    }));
+    res.json(formatted);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/debts', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const { client_id, amount, type } = req.body;
+  if (!client_id || !amount || amount <= 0 || !type) {
+    return res.status(400).json({ message: 'Invalid debt data' });
+  }
+  try {
+    const debt = new Debt({ client_id, amount, type, status: 'unpaid' });
+    await debt.save();
+    res.status(201).json({ message: 'Debt recorded' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/debts/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await Debt.findByIdAndUpdate(req.params.id, req.body);
+    res.json({ message: 'Debt updated' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/debts/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await Debt.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Debt deleted' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/debts/:id/pay', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await Debt.findByIdAndUpdate(req.params.id, { status: 'paid' });
+    res.json({ message: 'Debt marked as paid' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* =========================
+   CASH BALANCE
+========================= */
+
+app.get('/api/cash-balance', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    let cash = await CashBalance.findOne({});
+    if (!cash) {
+      cash = new CashBalance({});
+      await cash.save();
+    }
+    res.json(cash);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/cash-balance', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    await CashBalance.findOneAndUpdate({}, req.body, { upsert: true });
+    res.json({ message: 'Cash balance updated' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* =========================
+   SETTINGS
+========================= */
+
+app.post('/api/settings/balance', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const { amount } = req.body;
+  try {
+    await Settings.findOneAndUpdate({}, { opening_balance: amount }, { upsert: true });
+    res.json({ message: 'Opening balance updated' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 /* =========================
    404 HANDLER
