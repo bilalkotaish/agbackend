@@ -46,7 +46,9 @@ app.set('trust proxy', 1);
 interface AuthRequest extends Request {
   user?: any;
 }
-
+app.get('/cors-test', (req, res) => {
+  res.json({ message: 'CORS is working' });
+});
 // Middleware for Auth
 const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
