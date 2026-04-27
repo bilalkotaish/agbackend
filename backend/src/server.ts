@@ -20,6 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json());
+app.options('*', cors());
 
 
 const PORT = process.env.PORT || 5000;
@@ -94,10 +95,10 @@ app.get('/api/dashboard', authenticateToken, async (req: AuthRequest, res: Respo
     const debts = await Debt.find({ status: 'unpaid' });
     const settings = await Settings.findOne({});
     const cash = await CashBalance.findOne({}) || { system_usd: 0, system_lbp: 0, mobile_usd: 0, mobile_lbp: 0, physical_usd: 0, physical_lbp: 0 };
-    
+
     const RATE = 90000;
 
-    const balance = 
+    const balance =
       (Number(cash.system_usd || 0) + Number(cash.system_lbp || 0) / RATE) +
       (Number(cash.mobile_usd || 0) + Number(cash.mobile_lbp || 0) / RATE) +
       (Number(cash.physical_usd || 0) + Number(cash.physical_lbp || 0) / RATE);
@@ -117,24 +118,30 @@ app.get('/api/dashboard', authenticateToken, async (req: AuthRequest, res: Respo
     // Aggregation for client summaries
     const clientSummaries = await Debt.aggregate([
       { $match: { status: 'unpaid' } },
-      { $group: {
-        _id: '$client_id',
-        owed_to_me: { $sum: { $cond: [{ $eq: ['$type', 'owed_to_me'] }, '$amount', 0] } },
-        i_owe: { $sum: { $cond: [{ $eq: ['$type', 'i_owe'] }, '$amount', 0] } }
-      }},
-      { $lookup: {
-        from: 'clients',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'client_info'
-      }},
+      {
+        $group: {
+          _id: '$client_id',
+          owed_to_me: { $sum: { $cond: [{ $eq: ['$type', 'owed_to_me'] }, '$amount', 0] } },
+          i_owe: { $sum: { $cond: [{ $eq: ['$type', 'i_owe'] }, '$amount', 0] } }
+        }
+      },
+      {
+        $lookup: {
+          from: 'clients',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'client_info'
+        }
+      },
       { $unwind: '$client_info' },
-      { $project: {
-        id: '$_id',
-        name: '$client_info.name',
-        owed_to_me: 1,
-        i_owe: 1
-      }},
+      {
+        $project: {
+          id: '$_id',
+          name: '$client_info.name',
+          owed_to_me: 1,
+          i_owe: 1
+        }
+      },
       { $limit: 5 }
     ]);
 
@@ -313,10 +320,10 @@ app.post('/api/settings/balance', authenticateToken, async (req: AuthRequest, re
 // Catch-all for 404s
 app.use((req, res) => {
   console.log(`404 - Not Found: ${req.method} ${req.url}`);
-  res.status(404).json({ 
-    message: 'Route not found on backend', 
+  res.status(404).json({
+    message: 'Route not found on backend',
     path: req.url,
-    method: req.method 
+    method: req.method
   });
 });
 
