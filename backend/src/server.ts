@@ -310,12 +310,22 @@ app.post('/api/settings/balance', authenticateToken, async (req: AuthRequest, re
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Catch-all for 404s
+app.use((req, res) => {
+  console.log(`404 - Not Found: ${req.method} ${req.url}`);
+  res.status(404).json({ 
+    message: 'Route not found on backend', 
+    path: req.url,
+    method: req.method 
+  });
 });
 
 // Error Handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong on the server' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
