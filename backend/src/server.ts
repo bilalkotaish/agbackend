@@ -16,17 +16,25 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:5173',
   'https://agprogram-e9b7.vercel.app'
 ];
 
 const corsOptions = {
   origin: function (origin: any, callback: any) {
+    // allow Postman / mobile apps
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    // Check if origin is localhost or a vercel deployment
+    const isLocalhost = origin.includes('localhost');
+    const isVercel = origin.endsWith('.vercel.app');
+    const isAllowed = allowedOrigins.includes(origin);
+
+    if (isLocalhost || isVercel || isAllowed) {
       return callback(null, true);
     }
 
+    console.log('CORS blocked for origin:', origin);
     return callback(null, false);
   },
   credentials: true,
