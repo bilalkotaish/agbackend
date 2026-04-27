@@ -14,16 +14,7 @@ const allowedOrigins = [
   'https://agprogram-e9b7.vercel.app'
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-  },
-  credentials: true
-}));
+app.use(cors());
 
 app.options('*', cors());
 app.use((req, res, next) => {
