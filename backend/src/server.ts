@@ -16,7 +16,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://agprogram-e9b7.vercel.app'
+  'https://agprogram-e9b7.vercel.app/'
 ];
 
 const corsOptions = {
