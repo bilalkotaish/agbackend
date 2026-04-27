@@ -9,18 +9,28 @@ import { User, Client, Debt, Transaction, Settings, CashBalance } from './models
 dotenv.config();
 
 const app = express();
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://agprogram-e9b7.vercel.app'
+];
+
 app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+  },
+  credentials: true
 }));
+
+app.options('*', cors());
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
   next();
 });
 app.use(express.json());
-app.options('*', cors());
 
 
 const PORT = process.env.PORT || 5000;
