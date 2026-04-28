@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { Client } from './models';
 
 dotenv.config();
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/finance';
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://bilalkotaish283_db_user:bilal2000@cluster0.gezxjt9.mongodb.net/";
 
 const addAyoub = async () => {
   try {
