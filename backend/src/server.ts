@@ -307,6 +307,37 @@ app.delete('/api/clients/:id', authenticateToken, async (req: AuthRequest, res: 
   }
 });
 
+app.get('/api/clients/ledger/:name', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const requestedName = String(req.params.name || '').trim();
+    if (!requestedName) {
+      return res.status(400).json({ message: 'Client name is required' });
+    }
+
+    const escapedName = requestedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const client = await Client.findOne({
+      name: { $regex: `^${escapedName}$`, $options: 'i' }
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: `Client "${requestedName}" not found` });
+    }
+
+    const [transactions, debts] = await Promise.all([
+      Transaction.find({ client_id: client._id }).sort({ createdAt: -1 }),
+      Debt.find({ client_id: client._id }).sort({ createdAt: -1 })
+    ]);
+
+    res.json({
+      client: { id: client._id, name: client.name, phone: client.phone || null },
+      transactions: transactions.map(t => ({ ...t.toObject(), id: t._id })),
+      debts: debts.map(d => ({ ...d.toObject(), id: d._id }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 /* =========================
    DEBTS
 ========================= */
