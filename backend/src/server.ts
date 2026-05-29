@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import { connectDB } from './db';
-import { User, Client, Debt, Transaction, Settings, CashBalance } from './models';
+import { User, Client, Debt, Transaction, Settings, CashBalance, DailyReport } from './models';
 
 dotenv.config();
 
@@ -258,6 +258,124 @@ app.post('/api/transactions', authenticateToken, async (req: AuthRequest, res: R
     const trans = new Transaction({ type, amount, commission, client_id: client_id || null });
     await trans.save();
     res.status(201).json({ message: 'Transaction recorded' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/transactions/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { type, amount, commission, client_id } = req.body;
+    const updated = await Transaction.findByIdAndUpdate(
+      req.params.id,
+      { type, amount, commission, client_id: client_id || null },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ message: 'Transaction not found' });
+    res.json({ message: 'Transaction updated' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/transactions/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const deleted = await Transaction.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Transaction not found' });
+    res.json({ message: 'Transaction deleted' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* =========================
+   DAILY REPORTS
+========================= */
+
+// Archive today's transactions into a DailyReport and clear them
+app.post('/api/daily-reports/archive', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { date } = req.body; // 'YYYY-MM-DD'
+    if (!date) return res.status(400).json({ message: 'Date is required' });
+
+    // Check if already archived
+    const existing = await DailyReport.findOne({ date });
+    if (existing) return res.status(400).json({ message: 'This day has already been archived' });
+
+    // Get all transactions for that date
+    const startOfDay = new Date(date + 'T00:00:00.000Z');
+    const endOfDay = new Date(date + 'T23:59:59.999Z');
+
+    const transactions = await Transaction.find({
+      createdAt: { $gte: startOfDay, $lte: endOfDay }
+    }).populate('client_id', 'name');
+
+    if (transactions.length === 0) {
+      return res.status(400).json({ message: 'No transactions found for this date' });
+    }
+
+    let totalCommission = 0;
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
+
+    const archivedTransactions = transactions.map(t => {
+      totalCommission += Number(t.commission || 0);
+      if (t.type === 'deposit') totalDeposits += Number(t.amount);
+      else totalWithdrawals += Number(t.amount);
+
+      return {
+        type: t.type,
+        amount: t.amount,
+        commission: t.commission,
+        client_name: (t.client_id as any)?.name || null,
+        createdAt: t.createdAt
+      };
+    });
+
+    const report = new DailyReport({
+      date,
+      transactions: archivedTransactions,
+      totalCommission,
+      totalDeposits,
+      totalWithdrawals,
+      transactionCount: transactions.length
+    });
+
+    await report.save();
+
+    // Delete the archived transactions from the live collection
+    await Transaction.deleteMany({
+      createdAt: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    res.status(201).json({ message: 'Day archived successfully', report });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get a daily report by date
+app.get('/api/daily-reports/:date', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const report = await DailyReport.findOne({ date: req.params.date });
+    if (!report) return res.status(404).json({ message: 'No report found for this date' });
+    res.json(report);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all daily reports (for calendar overview)
+app.get('/api/daily-reports', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const reports = await DailyReport.find({}, {
+      date: 1,
+      totalCommission: 1,
+      totalDeposits: 1,
+      totalWithdrawals: 1,
+      transactionCount: 1
+    }).sort({ date: -1 });
+    res.json(reports);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

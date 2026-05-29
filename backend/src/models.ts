@@ -48,3 +48,20 @@ const CashBalanceSchema = new mongoose.Schema({
 });
 
 export const CashBalance = mongoose.model('CashBalance', CashBalanceSchema);
+
+const DailyReportSchema = new mongoose.Schema({
+  date: { type: String, required: true, unique: true }, // 'YYYY-MM-DD'
+  transactions: [{
+    type: { type: String, required: true },
+    amount: { type: Number, required: true },
+    commission: { type: Number, default: 0 },
+    client_name: { type: String, default: null },
+    createdAt: { type: Date }
+  }],
+  totalCommission: { type: Number, default: 0 },
+  totalDeposits: { type: Number, default: 0 },
+  totalWithdrawals: { type: Number, default: 0 },
+  transactionCount: { type: Number, default: 0 }
+}, { timestamps: true });
+
+export const DailyReport = mongoose.model('DailyReport', DailyReportSchema);
